@@ -22,7 +22,7 @@ class GUI:
         self.root = tk.Tk()  
         self.root.title("RTLS & Camera Integrated System")  
         self.root.protocol('WM_DELETE_WINDOW', self.destructor)
-
+        
         # Create Main Blocks
         self.control_frame = tk.Label(self.root, padx=5, pady=5)
         self.plot_frame = tk.LabelFrame(self.root, text="Grid Map", padx=5, pady=5, labelanchor='n')
@@ -54,7 +54,7 @@ class GUI:
         self.plot_bar = FigureCanvasTkAgg(self.plot_fig, master)
         self.plot_bar.draw()
         self.plot_bar.get_tk_widget().grid(row = 0, column = 0, sticky = 'WE')
-        self.plot_ani = animation.FuncAnimation(self.fig, self.tracker._update_plot, interval=250, 
+        self.plot_ani = animation.FuncAnimation(self.plot_fig, self.tracker._update_plot, interval=250, 
                                      init_func= lambda: self.tracker._setup_plot(self.plot_ax), blit=True)
 
     def add_video_content(self, master):
@@ -82,16 +82,19 @@ class GUI:
         self.vid_btn_right.bind("<Button-1>", lambda event: self.camera.setCMD('right'))
         self.vid_btn_right.bind("<ButtonRelease-1>", lambda event: self.camera.resetCMD())
         
-        self.vid_btn_reset = tk.Button(master, text = "CALIBRATE", bg="#b8dcff", command=self.camera.enablePID)
+        self.calib_str = tk.StringVar()
+        self.calib_str.set("CALIBRATE: OFF")
+        self.calib_bol = False 
+        self.vid_btn_calib = tk.Button(master, textvariable=self.calib_str, bg="#b8dcff", command=self.toggle_calib)
         self.vid_btn_capture = tk.Button(master, text = " CAPTURE ", bg="#b8dcff", command=self.video_capture) 
-        self.vid_btn_follow = tk.Button(master, text = "FOLLOW: ENABLED", bg="#b8dcff") 
+        self.vid_btn_follow = tk.Button(master, text = "FIND TAG: ON", bg="#b8dcff") 
 
         # arranging button widgets 
         self.vid_btn_up.grid(row = 1, column = 1, sticky = 'nsew') 
         self.vid_btn_down.grid(row = 2, column = 1, sticky = 'nsew')  
         self.vid_btn_left.grid(row = 1, column = 0, rowspan=2, sticky = 'nsew')
         self.vid_btn_right.grid(row = 1, column = 2, rowspan=2, sticky = 'nsew') 
-        self.vid_btn_reset.grid(row = 3, column = 0, sticky = 'nsew')
+        self.vid_btn_calib.grid(row = 3, column = 0, sticky = 'nsew')
         self.vid_btn_capture.grid(row = 3, column = 2, sticky = 'nsew')
         self.vid_btn_follow.grid(row = 3, column = 1, sticky = 'nsew')       
         self.video_update()
@@ -106,6 +109,7 @@ class GUI:
             pts = np.where(pts<0, 0, pts) 
             pixpts = self.camera.world_to_screen(pts)
             frame = self.camera.draw_locations(frame, pixpts)
+        frame = cv2.circle(frame, self.camera.center, 2, (0, 255, 0), -1)
         cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
         self.current_image = Image.fromarray(cv2image)  # convert image for PIL
         imgtk = ImageTk.PhotoImage(image=self.current_image)  # convert image for tkinter
@@ -120,7 +124,17 @@ class GUI:
         p = os.path.join(self.output_path, filename)  # construct output path
         self.current_image.save(p, "JPEG")  # save image as jpeg file
         print("[APP] saved {}".format(filename))
-                  
+        
+    def toggle_calib(self):
+        if self.calib_bol == False:
+            self.calib_str.set("CALIBRATE: ON")
+            self.calib_bol = True
+            self.camera.enablePID()
+        else:
+            self.calib_str.set("CALIBRATE: OFF")
+            self.calib_bol = False
+            self.camera.disablePID()
+
     def destructor(self):
         """ Destroy the root object and release all resources """
         # Todo: Send SIGINT signal to other processes

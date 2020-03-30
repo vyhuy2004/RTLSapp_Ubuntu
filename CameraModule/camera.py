@@ -218,8 +218,7 @@ class CameraController():
                 #print(f"new pan error: {new_pan_error} | new tilt error: {new_tilt_error} | hit counter: {self.hit_counter}")
 
                 # Check if this value is valid (not outlier)
-                if    (abs(new_pan_error - self.pan_error.value) > self.OUTLIER_LIMIT) \
-                   or (abs(new_tilt_error - self.tilt_error.value) > self.OUTLIER_LIMIT):
+                if (abs(new_pan_error - self.pan_error.value) > self.OUTLIER_LIMIT) or (abs(new_tilt_error - self.tilt_error.value) > self.OUTLIER_LIMIT):
                     # Need this to handle cold start
                     if (self.pan_error.value == 0):
                         self.pan_error.value = new_pan_error
