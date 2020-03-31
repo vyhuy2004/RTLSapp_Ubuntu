@@ -96,7 +96,7 @@ class CameraController():
             cam = cam / cam[2]                # Divide x,y by z
             pixpos = self.intrinsic.dot(cam)[:2]
             on_screen = (pixpos[0]>=0) and (pixpos[0]<self.height) and \
-                        (pixpos[1]>=0) and (pixpos[1]<self.weight)
+                        (pixpos[1]>=0) and (pixpos[1]<self.width)
             if return_valid_only and (on_screen == False):
                 continue
             pixel_pos.append(pixpos)     # Pixel location, only have x & y

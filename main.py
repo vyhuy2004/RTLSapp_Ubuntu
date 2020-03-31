@@ -27,9 +27,9 @@ def core_process(output_path, pan, tilt, pan_error, tilt_error, pid_active):
         signal.signal(signal.SIGINT, core_signal_handler)
         video_getter = VideoGet(0).start()
         tracker = LocationTracker()
-        camera = CameraController(camera_position=[1.1,0.74,0.72])
+        camera = CameraController(camera_position=[0.03,2.82,1.33])
 
-        camera.init(refpoint_world=[0., 0.33, 0.30],
+        camera.init(refpoint_world=[0.85, 0.0, 1.35],
                     use_pid = True, pid_active=pid_active, pan_error=pan_error, tilt_error=tilt_error)
                 
         servo_thread = threading.Thread(target=camera.CameraRotation_Thread, args=(pan, tilt, video_getter))

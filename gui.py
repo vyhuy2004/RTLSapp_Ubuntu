@@ -104,11 +104,11 @@ class GUI:
         if self.camera.pid_active.value == True:
             frame = self.camera.draw_refpoint_estimation(frame)
         if not self.tracker.tags_latest.empty:
-            pts = self.dwm_tracker.tags_latest[['x', 'y', 'z']].to_numpy().astype(float)
+            pts = self.tracker.tags_latest[['x', 'y', 'z']].to_numpy().astype(float)
             #pts[:, 2] = 0.54
             pts = np.where(pts<0, 0, pts) 
             pixpts = self.camera.world_to_screen(pts)
-            frame = self.camera.draw_locations(frame, pixpts)
+            frame = self.camera.draw_points(frame, pixpts)
         frame = cv2.circle(frame, self.camera.center, 2, (0, 255, 0), -1)
         cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
         self.current_image = Image.fromarray(cv2image)  # convert image for PIL
