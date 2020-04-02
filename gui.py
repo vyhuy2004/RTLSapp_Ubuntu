@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageTk
 
 class GUI:
-    def __init__(self, output_path, camera, tracker, video_getter):
+    def __init__(self, output_path, camera, tracker, video_getter, remote=False, socket=None):
         self.output_path = output_path    
         self.current_image = None
         
@@ -17,7 +17,11 @@ class GUI:
         self.camera = camera
         self.tracker = tracker
         self.video_getter = video_getter
-        
+        if remote:
+            self.remote = True
+            self.socket = socket
+        else:
+            self.remote = False
         # Create Main Window
         self.root = tk.Tk()  
         self.root.title("RTLS & Camera Integrated System")  
@@ -42,7 +46,7 @@ class GUI:
         tk.Grid.columnconfigure(master, 0, weight=1)
         tk.Grid.columnconfigure(master, 1, weight=1)
 
-        b1 = tk.Button(master, text = " Run ", command=self.tracker.run) 
+        b1 = tk.Button(master, text = " Run ", command=self.run_tracker) 
         b2 = tk.Button(master, text = "Stop", command=self.tracker.stop) 
 
         b1.grid(row = 0, column = 0, sticky = 'NSEW') 
@@ -134,11 +138,18 @@ class GUI:
             self.calib_str.set("CALIBRATE: OFF")
             self.calib_bol = False
             self.camera.disablePID()
+            
+    def run_tracker(self):
+        self.tracker.run()
+        if self.remote:
+            self.socket.send(b'run')
 
     def destructor(self):
         """ Destroy the root object and release all resources """
         # Todo: Send SIGINT signal to other processes
         print("[APP] closing...")
+        if self.remote:
+            self.socket.close()
         self.camera.stop_thread = True
         self.video_getter.stop()
         self.video_getter.stream.release()

@@ -8,10 +8,13 @@ class VideoGet:
     with a dedicated thread.
     """
 
-    def __init__(self, src=0, dim=(640, 480)):
-        self.stream = cv2.VideoCapture(src)
-        self.stream.set(3, dim[0])
-        self.stream.set(4, dim[1])
+    def __init__(self, src=0, dim=(640, 480), remote=False):
+        if remote:
+            self.stream = cv2.VideoCapture('tcpclientsrc host=192.168.1.215 port=5000  ! gdpdepay !  rtph264depay ! avdec_h264 ! videoconvert ! appsink sync=false', cv2.CAP_GSTREAMER)
+        else:
+            self.stream = cv2.VideoCapture(src)
+            self.stream.set(3, dim[0])
+            self.stream.set(4, dim[1])
         (self.grabbed, self.frame) = self.stream.read()
         self.stopped = False
 

@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from servo.PCA9685 import PCA9685
 import time
 import pickle
 
@@ -24,9 +23,10 @@ class CameraController():
     OUTLIER_LIMIT = 20
     WEIGHTED_AVERAGE_COEF = 0.9
 
-    def __init__(self, camera_position = None, output_dimension = None, default_pan=90, default_tilt=179):
+    def __init__(self, camera_position = None, output_dimension = None, default_pan=90, default_tilt=179, remote=False, socket=None):
         # Setup internal camera parameters
         self.ready = False
+        self.remote = remote
         cam_params = pickle.load(open("CameraModule/camera.p", "rb"))
         self.intrinsic = cam_params['intrinsic']
         self.distortion_coefs = cam_params['distortion_coefs']
@@ -37,7 +37,6 @@ class CameraController():
             self.height, self.width = output_dimension[0], output_dimension[1]
             
         # Initialize servo motors and Rotate to default position
-        self.pwm = PCA9685()
         self.DEFAULT_PAN = default_pan
         self.DEFAULT_TILT = default_tilt
         self.tilt = default_tilt
@@ -45,15 +44,20 @@ class CameraController():
         self.step = 1
         self.active_cmd = None
         self.stop_thread = False   
-        try:
-            self.pwm.setPWMFreq(50)
-            self.pwm.setRotationAngle(self.TILT_SERVO, self.tilt)
-            self.pwm.setRotationAngle(self.PAN_SERVO, self.pan)
-            #self.pwm_lastactive = time.time()
-        except:
-            self.pwm.exit_PCA9685()
-            print ("[CAMERA] Servo Initialization Failed!")
-            
+        
+        if remote == False:
+            from servo.PCA9685 import PCA9685
+            self.pwm = PCA9685()
+            try:
+                self.pwm.setPWMFreq(50)
+                self.pwm.setRotationAngle(self.TILT_SERVO, self.tilt)
+                self.pwm.setRotationAngle(self.PAN_SERVO, self.pan)
+                #self.pwm_lastactive = time.time()
+            except:
+                self.pwm.exit_PCA9685()
+                print ("[CAMERA] Servo Initialization Failed!")
+        else:
+            self.socket = socket
         
     def init(self, refpoint_world=[0., 0., 0.], use_pid = True, pid_active=None, pan_error=None, tilt_error=None):
         # todo: look for circle -> get pixel coordinate of the center of circle
@@ -127,17 +131,18 @@ class CameraController():
         if (angle == self.pan):
             pass
         elif (angle>=self.MIN_PAN_ANGLE) and (angle<=self.MAX_PAN_ANGLE):
-            self.pwm.setRotationAngle(self.PAN_SERVO, angle)
             self.pan = angle
         elif (angle<self.MIN_PAN_ANGLE) and find_best:
-            self.pwm.setRotationAngle(self.PAN_SERVO, self.MIN_PAN_ANGLE)
             self.pan = self.MIN_PAN_ANGLE
         elif (angle>self.MAX_PAN_ANGLE) and find_best:
-            self.pwm.setRotationAngle(self.PAN_SERVO, self.MAX_PAN_ANGLE)
             self.pan = self.MAX_PAN_ANGLE
         else:
             print(f"[CAMERA] set-angle is out of reach | {angle}")
             return False
+        if self.remote:
+            self.socket.send(f'pan {self.pan}'.encode())
+        else:
+            self.pwm.setRotationAngle(self.PAN_SERVO, self.pan)
         if not (idle_counter == None):
             if (prev_pan == self.pan):
                 idle_counter = idle_counter + 1
@@ -150,17 +155,18 @@ class CameraController():
         if (angle == self.tilt):
             pass
         elif (angle>=self.MIN_TILT_ANGLE) and (angle<=self.MAX_TILT_ANGLE):
-            self.pwm.setRotationAngle(self.TILT_SERVO, angle)
             self.tilt = angle
         elif (angle<self.MIN_TILT_ANGLE) and find_best:
-            self.pwm.setRotationAngle(self.TILT_SERVO, self.MIN_TILT_ANGLE)
             self.tilt = self.MIN_TILT_ANGLE
         elif (angle>self.MAX_TILT_ANGLE) and find_best:
-            self.pwm.setRotationAngle(self.TILT_SERVO, self.MAX_TILT_ANGLE)
             self.tilt = self.MAX_TILT_ANGLE
         else:
             print(f"[CAMERA] set-angle is out of reach | {angle}")
             return False
+        if self.remote:
+            self.socket.send(f'tilt {self.tilt}'.encode())
+        else:
+            self.pwm.setRotationAngle(self.TILT_SERVO, self.tilt)
         if not (idle_counter == None):
             if (prev_tilt == self.tilt):
                 idle_counter = idle_counter + 1
@@ -186,22 +192,19 @@ class CameraController():
         print("[CAMERA] Camera Rotation Thread started")
         while True:
             if self.stop_thread:
-                self.pwm.exit_PCA9685()
+                if self.remote == False:
+                    self.pwm.exit_PCA9685()
                 break
             # serve active command (if any)
             if not (self.active_cmd == None):
                 if (self.active_cmd == self.CMD_DOWN) and (self.tilt < self.MAX_TILT_ANGLE):
-                    self.tilt = min(self.MAX_TILT_ANGLE, self.tilt + self.step)
-                    self.pwm.setRotationAngle(self.TILT_SERVO, self.tilt)
+                    self.setTilt(self.tilt + self.step)
                 elif (self.active_cmd == self.CMD_UP) and (self.tilt > self.MIN_TILT_ANGLE):
-                    self.tilt = max(self.MIN_TILT_ANGLE, self.tilt - self.step)
-                    self.pwm.setRotationAngle(self.TILT_SERVO, self.tilt)
+                    self.setTilt(self.tilt - self.step)
                 elif (self.active_cmd == self.CMD_LEFT) and (self.pan < self.MAX_PAN_ANGLE):
-                    self.pan = min(self.MAX_PAN_ANGLE, self.pan + self.step)
-                    self.pwm.setRotationAngle(self.PAN_SERVO, self.pan)
+                    self.setPan(self.pan + self.step)
                 elif (self.active_cmd == self.CMD_RIGHT) and (self.pan > self.MIN_PAN_ANGLE):
-                    self.pan = max(self.MIN_PAN_ANGLE, self.pan - self.step)
-                    self.pwm.setRotationAngle(self.PAN_SERVO, self.pan)                
+                    self.setPan(self.pan - self.step)      
                 time.sleep(0.1)
 
             # Handle angle adjustment made by PID processes
