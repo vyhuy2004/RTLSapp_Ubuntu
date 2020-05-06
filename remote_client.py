@@ -26,7 +26,7 @@ def pid_signal_handler(sig, frame):
     
 def core_process(output_path, pan, tilt, pan_error, tilt_error, pid_active):
         s = socket.socket()
-        s.connect(('192.168.1.215', 8802))
+        s.connect(('192.168.70.4', 8802))
         print(s.recv(1024))
         signal.signal(signal.SIGINT, core_signal_handler)
         video_getter = VideoGet(remote=True).start()

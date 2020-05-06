@@ -16,7 +16,7 @@ def signal_handler(sig, frame):
     
 def main():
     signal.signal(signal.SIGINT, signal_handler)
-    tracker = LocationTracker(remote=True, address=('192.168.1.70', 8801))
+    tracker = LocationTracker(remote=True, address=('192.168.70.1', 8801))
     pwm = PCA9685()
     try:
         pwm.setPWMFreq(50)

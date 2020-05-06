@@ -10,7 +10,7 @@ class VideoGet:
 
     def __init__(self, src=0, dim=(640, 480), remote=False):
         if remote:
-            self.stream = cv2.VideoCapture('tcpclientsrc host=192.168.1.215 port=5000  ! gdpdepay !  rtph264depay ! avdec_h264 ! videoconvert ! appsink sync=false', cv2.CAP_GSTREAMER)
+            self.stream = cv2.VideoCapture('tcpclientsrc host=192.168.70.4 port=5000  ! gdpdepay !  rtph264depay ! avdec_h264 ! videoconvert ! appsink sync=false', cv2.CAP_GSTREAMER)
         else:
             self.stream = cv2.VideoCapture(src)
             self.stream.set(3, dim[0])

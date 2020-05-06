@@ -6,15 +6,18 @@ import socket
 import time
 import collections
 import os
+import random
 import matplotlib.pyplot as plt
 from queue import Queue 
 
+registered_tags = { '0397': 'Manager', '5385': 'Employee' }
 class LocationTracker():
-    def __init__(self, remote=False, address=None, debug=False):
+    def __init__(self, remote=False, address=None, debug=False, use_mockdata=False):
+        self.names = registered_tags
         self.debug = False
         self.stop_thread = False
         self.remote = remote
-        
+        self.mock = use_mockdata
         # tracking components
         try:
             system = os.uname()[1]
@@ -36,15 +39,22 @@ class LocationTracker():
                 self.tags_latest = pd.DataFrame(columns = ['id', 'x', 'y', 'z', 'time'])
                 print('tracker will run in Local mode')
         else:
-            self.address = address
-            self.socket = socket.socket()
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind(self.address)       
-            self.socket.listen()
-            self.thread_name = self.DWM_Thread_RemoteReceiver
             self.anchors = pd.read_csv(r'TrackerModule/anchors.csv')
+            self.x_max, self.y_max, self.z_max = self.anchors['x'].max(), self.anchors['y'].max(), self.anchors['z'].max()
             self.tags_log = pd.DataFrame(columns = ['id', 'x', 'y', 'z', 'time']) 
             self.tags_latest = pd.DataFrame(columns = ['id', 'x', 'y', 'z', 'time'])
+            self.tags_info = {}
+            self.tags_color = []
+            if use_mockdata:
+                self.thread_name = self.DWM_Thread_RemoteReceiver_Mock
+            else:
+                self.address = address
+                self.socket = socket.socket()
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self.socket.bind(self.address)       
+                self.socket.listen()
+                self.thread_name = self.DWM_Thread_RemoteReceiver
+
             print('tracker will run in RemoteReceiver mode')
 
 
@@ -162,12 +172,42 @@ class LocationTracker():
                 self.tags_latest.iloc[idx[0], 1:] = np.array([x, y, z, time_now], dtype=np.float)
             else:
                 self.tags_latest = self.tags_latest.append({'id':tagid, 'x':x, 'y':y, 'z':z, 'time': time_now}, ignore_index=True)
+                self.tags_color.append(np.random.random())
                 # self.color_code[tagid] = np.random.rand(3,)
             print(f'Tag: {tagid} | x:{x}, y:{y}, z:{z}')
                 
+
+    def DWM_Thread_RemoteReceiver_Mock(self):
+        alphas = 'abcdefgh'
+        print(f'RemoteReceiver: Using Mock Data')
+        self.mock_index = 0
+        self.mock_step = 0.01
+        self.mock_tags = 2 
+        for i in range(self.mock_tags):
+            row = {'id': hex(np.random.randint(0xFFF, 0x10000)[2:]),
+                   'x' : np.random.uniform(0, self.x_max),
+                   'y' : np.random.uniform(0, self.y_max),
+                   'z' : np.random.uniform(0, self.z_max),
+                   'time': time.time() }
+            self.tags_latest = self.tags_latest.append(row, ignore_index=True)
+            self.tags_color.append(np.random.random())
+        while True:
+            if self.stop_thread:
+                break
+            tagid, x, y, z, _ = self.tags_latest.iloc[self.mock_index]
+            x_new, y_new, z_new = (x + self.mock_step) if x < self.x_max else 0, (y + self.mock_step) if y < self.y_max else 0, z 
+            time_now = time.time()
+            self.tags_log = self.tags_log.append({'id':tagid, 'x':float(x_new), 'y':float(y_new), 'z':float(z_new), 'time': time_now}, ignore_index=True)
+            self.tags_latest.iloc[self.mock_index, 1:] = np.array([x_new, y_new, z_new, time_now], dtype=np.float)
+            print(f'Tag: {tagid} | x:{x_new:.3f}, y:{y_new:.3f}, z:{z_new:.3f}')
+            self.mock_index = (self.mock_index + 1) %  self.mock_tags
+            time.sleep(0.05)
+
+
     def _setup_plot(self, ax):
-        ax.grid(b=True, which='major', color='#999999', linestyle='-', alpha=0.2)
-        ax.set_axisbelow(True)
+        self.ax = ax
+        self.ax.grid(b=True, which='major', color='#999999', linestyle='-', alpha=0.2)
+        self.ax.set_axisbelow(True)
 
         anchors_x = self.anchors['x'].to_numpy()
         anchors_y = self.anchors['y'].to_numpy()
@@ -175,20 +215,32 @@ class LocationTracker():
         tags_y = self.tags_latest['y'].to_numpy()
         tags_id = self.tags_latest['id']
         # tags_color = np.array(list(self.color_code.values()), dtype=np.float)
-        self.anchors_pts = ax.scatter(anchors_x, anchors_y, s=80, color='r')
-        self.tags_pts = ax.scatter(tags_x, tags_y, s=80, color='g')
-        # for idx, tag_id in enumerate(tags_id):
-        #     self.annotations.append(ax.annotate(f'(tag_id{tags_x[idx]}, {tags_y[idx]})', tuple(tags_x[idx], tags_y[idx]), 
-        #                     textcoords="offset points", # how to position the text
-        #                     xytext=(0,10), 
-        #                     ha='center')) 
-        return self.tags_pts, self.anchors_pts
+        self.anchors_pts = self.ax.scatter(anchors_x, anchors_y, s=80, color='r')
+        self.tags_pts = self.ax.scatter(tags_x, tags_y, s=80, color='g')
+        self.annotations = []
+        for idx, tag_id in enumerate(tags_id):
+            self.annotations.append(self.ax.annotate(f'{tag_id}({float(tags_x[idx]):.2f},{float(tags_y[idx]):.2f})', 
+                                    (float(tags_x[idx]), float(tags_y[idx]) + 0.08), ha='center')) 
+        return self.tags_pts, self.anchors_pts, (*self.annotations)
     
 
     def _update_plot(self, i):
         """Update the scatter plot."""
-        # tags_color = np.array(list(self.color_code.values()), dtype=np.float)
+        colors = np.array(self.tags_color)
+        tags_x = self.tags_latest['x'].to_numpy()
+        tags_y = self.tags_latest['y'].to_numpy()
+        tags_id = self.tags_latest['id']
         self.tags_pts.set_offsets(self.tags_latest[['x', 'y']].to_numpy())
-        # self.tags_pts.set_array(tags_color)
+        tags_num = len(tags_id)
+        ann_size = len(self.annotations)
+        for idx, tag_id in enumerate(tags_id):
+            if idx < ann_size:
+                self.annotations[idx].set_text(f'{tag_id}({float(tags_x[idx]):.2f},{float(tags_y[idx]):.2f})')
+                self.annotations[idx].set_position((float(tags_x[idx]), float(tags_y[idx]) + 0.08))
+            else:
+                self.annotations.append(self.ax.annotate(f'{tag_id}({float(tags_x[idx]):.2f},{float(tags_y[idx]):.2f})', 
+                                    (float(tags_x[idx]), float(tags_y[idx]) + 0.08), ha='center')) 
+        if tags_num > 0:
+            self.tags_pts.set_array(np.array(self.tags_color, dtype=float))
 
-        return self.tags_pts, self.anchors_pts
+        return self.tags_pts, self.anchors_pts, (*self.annotations)
